@@ -2,7 +2,6 @@
 from logging import raiseExceptions
 import torch
 import numpy as np
-from functorch import vmap, jacrev, jacfwd
 from collections import Counter
 from copy import deepcopy
 from tqdm import tqdm
@@ -170,7 +169,7 @@ class DiffAN():
 
             if self.residue and len(order) > 0:
                 score_previous_leaves = get_score_previous_leaves(X).squeeze()
-                jacobian_ = jacfwd(get_score_previous_leaves)(X).squeeze()
+                jacobian_ = torch.func.jacfwd(get_score_previous_leaves)(X).squeeze()
                 if len(order) == 1:
                     jacobian_, score_previous_leaves = jacobian_.unsqueeze(0), score_previous_leaves.unsqueeze(0)
                 score_active += torch.einsum("i,ij -> j",score_previous_leaves/ jacobian_[:, order].diag(),jacobian_[:, active_nodes])#
@@ -187,7 +186,7 @@ class DiffAN():
         jacobian = []
         for x_batch in data_loader:
             x_batch_dropped = self.get_masked(x_batch, active_nodes) if self.masking else x_batch
-            jacobian_ = vmap(jacrev(model_fn_functorch))(x_batch_dropped.unsqueeze(1)).squeeze()
+            jacobian_ = torch.vmap(torch.func.jacrev(model_fn_functorch))(x_batch_dropped.unsqueeze(1)).squeeze()
             jacobian.append(jacobian_[...,active_nodes].detach().cpu().numpy())
         jacobian = np.concatenate(jacobian, 0)
         leaf = self.get_leaf(jacobian)
